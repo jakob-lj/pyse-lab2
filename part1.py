@@ -5,8 +5,11 @@ import matplotlib.pyplot as plt
 
 import sys
 
-planes = np.zeros(24)
+planes = []
+iats = {}
 
+P_DELAY = 0.5
+MY_DELAY = 0
 
 
 def getTime(time):
@@ -26,18 +29,26 @@ class PlaneGenerator(object):
         # self.action = env.process(self.run())
 
     def generate(self):
-        n = 0
-        while n < 20000:
+        while True:
             if (getTime(self.env.now) >= 5): # generate no planes in this time period
-                plane = Plane(env, '%s' % self.env.now)
+                delay = self.getDelay()
+                iat = self.interArrivalTime(getTime(self.env.now)) + delay
+                plane = Plane(env, '%s' % self.env.now, iat, env.now)
                 env.process(plane.run())
                 # print(self.calcTimeout()._delay)
-                yield self.calcTimeout()
-
+                yield env.timeout(iat + delay)
             else:
                 yield self.env.timeout(5 - getTime(self.env.now))
-            n += 1
         
+    def getDelay(self):
+        if (np.random.choice([True, False], p=[P_DELAY, 1- P_DELAY])):
+            return self.getDelay()
+        else:
+            return 0
+
+    def getDelayTime(self):
+        return np.random.gamma(shape=3, scale = MY_DELAY)
+
     def calcTimeout(self):
         return env.timeout(self.interArrivalTime(getTime(self.env.now)))
 
@@ -46,33 +57,36 @@ class PlaneGenerator(object):
         return max(self.TGuard, self.Tned(time))
 
     def Tned(self, time):
-        return 1/self.TnedIntensity(time)
+        return self.TnedIntensity(time)/3600
 
     def TnedIntensity(self, time):
         timeOfDay = getTime(time)
         if (timeOfDay < 5):
             return None
         elif (timeOfDay < 8):
-            return 120/3
+            return np.random.exponential(120)
         elif (timeOfDay < 11):
-            return 30/3
+            return np.random.exponential(30)
         elif (timeOfDay < 15):
-            return 150/4
+            return np.random.exponential(150)
         elif (timeOfDay < 20):
-            return 30/5
+            return np.random.exponential(30)
         elif (timeOfDay < 24):
-            return 120/4
+            return np.random.exponential(120)
         else:
             return None
         
 
 class Plane(object):
 
-    def __init__(self, env, name):
+    def __init__(self, env, name, iat, sced):
         self.env = env
         self.name = name
-        print("Generated plane %.2f" % float(name))
-        planes[int(getTime(self.env.now))] += 1
+        self.interArrivalTime = iat
+        self.scheduled = sced
+        # print("Generated plane %.2f" % float(name))
+        planes.append(self)
+
 
     def run(self):
         while True:
@@ -103,10 +117,41 @@ class Plane(object):
 
 
 env = simpy.Environment()
-plane = PlaneGenerator(env)
+pg = PlaneGenerator(env)
 env.run(until=24)
 
-plt.xaxis()
-plt.bar(np.linspace(0, 23, 24), planes)
-plt.legend()
+# means = np.zeros(24)
+
+# for el in iats:
+#     means[el] = iats[el]['sum'] / iats[el]['count']
+
+# plt.plot(range(24), means)
+
+print(len(planes))
+
+n = len(planes)
+
+x = [0, 5]
+y = [0, 0]
+
+m = 15
+ 
+for i in range(0, n, m):
+    y1 = y2 = y3 = 0
+    x1 = x2 = x3 = 0
+
+    xSum = 0
+    ySum = 0
+    nCalc = min(m, n - i)
+    for j in range(nCalc):
+        ySum += planes[i + j].interArrivalTime
+        xSum += planes[i + j].scheduled
+
+    y.append(ySum/nCalc)
+    x.append(xSum/nCalc)
+
+plt.xlabel('Time of day')
+plt.ylabel('IAT')
+
+plt.plot(x, y)
 plt.show()
