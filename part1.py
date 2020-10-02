@@ -9,7 +9,7 @@ planes = []
 iats = {}
 
 P_DELAY = 0.5
-MY_DELAY = 0
+MY_DELAY = 0/3600
 
 
 def getTime(time):
@@ -21,7 +21,6 @@ class PlaneGenerator(object):
 
         self.TGuard = 60/3600 # seconds
         self.PDelay = 0.5 # 
-        self.XDelay = 0 # seconds
 
         env.process(self.generate())
 
@@ -42,7 +41,7 @@ class PlaneGenerator(object):
         
     def getDelay(self):
         if (np.random.choice([True, False], p=[P_DELAY, 1- P_DELAY])):
-            return self.getDelay()
+            return self.getDelayTime()
         else:
             return 0
 
@@ -144,7 +143,7 @@ for i in range(0, n, m):
     ySum = 0
     nCalc = min(m, n - i)
     for j in range(nCalc):
-        ySum += planes[i + j].interArrivalTime
+        ySum += planes[i + j].interArrivalTime*3600 # convert to seconds
         xSum += planes[i + j].scheduled
 
     y.append(ySum/nCalc)
@@ -153,5 +152,8 @@ for i in range(0, n, m):
 plt.xlabel('Time of day')
 plt.ylabel('IAT')
 
+plt.title("MY_DELAY: %.0f seconds - P_DELAY: %s " % (MY_DELAY*3600, P_DELAY))
+
 plt.plot(x, y)
+plt.savefig('figs/my=%.0fp=%s.png' % (MY_DELAY*3600, P_DELAY))
 plt.show()
