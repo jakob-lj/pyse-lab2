@@ -92,6 +92,8 @@ class Plane(object):
         self.scheduled = sced
         self.runways = runways
         self.env.process(self.live())
+        self.landing = 0
+        self.takeOff = 0
         planes.append(self)
         # print("Generated plane %.2f" % float(name))
 
@@ -103,6 +105,7 @@ class Plane(object):
             yield req
             
             yield self.env.timeout(T_LANDING)
+            self.landing = self.env.now
             print("Plane %s landed at %s" % (self.name, getHours(self.env.now)))
         
         tat = self.getTurnAroundTime()
@@ -113,6 +116,7 @@ class Plane(object):
             yield req
 
             yield self.env.timeout(T_TAKE_OFF)
+            self.takeOff = self.env.now
             print("Plane %s has left airspace at %s" % (self.name, getHours(self.env.now)))
     
         # while True:
@@ -151,27 +155,43 @@ n = len(planes)
 x = [0, 5]
 y = [0, 0]
 
-m = 7
+# m = 1
  
-for i in range(0, n, m):
-    y1 = y2 = y3 = 0
-    x1 = x2 = x3 = 0
+# for i in range(0, n, m):
 
-    xSum = 0
-    ySum = 0
-    nCalc = min(m, n - i)
-    for j in range(nCalc):
-        ySum += planes[i + j].interArrivalTime*3600 # convert to seconds
-        xSum += planes[i + j].scheduled
+#     xSum = 0
+#     ySum = 0
+#     nCalc = min(m, n - i)
+#     for j in range(nCalc):
+#         print(planes[i+j].landing)
+#         ySum += planes[i + j].landing
+#         xSum += planes[i + j].scheduled
 
-    y.append(ySum/nCalc)
-    x.append(xSum/nCalc)
+#     y.append(ySum/nCalc)
+#     x.append(xSum/nCalc)
+
+n = 24
+
+landingX = np.linspace(0, 24, n)
+
+landingY = np.zeros(n)
+
+lastPlaneIndex = 0
+
+plane = planes[lastPlaneIndex]
+
+for i in range(len(landingX)):
+    while (lastPlaneIndex < len(planes) - 1 and plane.landing < landingX[i]):
+        landingY[i] += 1
+        lastPlaneIndex += 1
+        plane = planes[lastPlaneIndex]
+    
 
 plt.xlabel('Time of day')
 plt.ylabel('IAT')
 
-plt.title("MY_DELAY: %.0f seconds - P_DELAY: %s " % (MY_DELAY*3600, P_DELAY))
+plt.title("LANDING: MY_DELAY: %.0f seconds - P_DELAY: %s " % (MY_DELAY*3600, P_DELAY))
 
-plt.plot(x, y)
-plt.savefig('figs/my=%.0fp=%s.png' % (MY_DELAY*3600, P_DELAY))
+plt.plot(landingX, landingY)
+#plt.savefig('figs/my=%.0fp=%s.png' % (MY_DELAY*3600, P_DELAY))
 plt.show()
