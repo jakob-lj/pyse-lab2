@@ -2,6 +2,8 @@
 import simpy
 import numpy as np
 import matplotlib.pyplot as plt
+import string
+import random
 
 import sys
 
@@ -10,15 +12,20 @@ iats = {}
 
 P_DELAY = 0.5
 MY_DELAY = 0/3600
-
+T_LANDING = 1/60 # 60 seconds
+T_TAKE_OFF = 1/60 # 60 seconds
+MY_TA = 3/4
 
 def getTime(time):
     return time % 24
 
-class PlaneGenerator(object):
-    def __init__(self, env):
-        self.env = env
+def getHours(time):
+    return "%s:%s" % (str(time).split('.')[0], int((time % 1)*60))
 
+class PlaneGenerator(object):
+    def __init__(self, env, runways):
+        self.env = env
+        self.runways = runways
         self.TGuard = 60/3600 # seconds
         self.PDelay = 0.5 # 
 
@@ -32,8 +39,7 @@ class PlaneGenerator(object):
             if (getTime(self.env.now) >= 5): # generate no planes in this time period
                 delay = self.getDelay()
                 iat = self.interArrivalTime(getTime(self.env.now)) + delay
-                plane = Plane(env, '%s' % self.env.now, iat, env.now)
-                env.process(plane.run())
+                plane = Plane(env, '%s' % self.env.now, iat, env.now, self.runways)
                 # print(self.calcTimeout()._delay)
                 yield env.timeout(iat + delay)
             else:
@@ -78,25 +84,36 @@ class PlaneGenerator(object):
 
 class Plane(object):
 
-    def __init__(self, env, name, iat, sced):
+    def __init__(self, env, name, iat, sced, runways):
         self.env = env
-        self.name = name
+        #self.name = "%i" % int(float(name)*1000)
+        self.name = ''.join([random.choice(string.ascii_letters + string.digits) for n in range(10)]).upper()
         self.interArrivalTime = iat
         self.scheduled = sced
-        # print("Generated plane %.2f" % float(name))
+        self.runways = runways
+        self.env.process(self.live())
         planes.append(self)
+        # print("Generated plane %.2f" % float(name))
 
+    def getTurnAroundTime(self):
+        return np.random.gamma(shape=7, scale=MY_TA)
+        
+    def live(self):
+        with self.runways.request(priority=1) as req:
+            yield req
+            
+            yield self.env.timeout(T_LANDING)
+            print("Plane %s landed at %s" % (self.name, getHours(self.env.now)))
+        
+        tat = self.getTurnAroundTime()
+        print("Plane %s requested airport facilities for %s hours with take off scheduled at %s" % (self.name, getHours(tat), getHours(self.env.now + tat)))
+        yield self.env.timeout(tat)
 
-    def run(self):
-        while True:
-            #print('Start parking and charging at %d' % self.env.now)
-            charge_duration = 5
-            # We may get interrupted while charging the battery
+        with self.runways.request(priority = 2) as req:
+            yield req
 
-            # print('Start driving at %d' % self.env.now)
-            trip_duration = 2
-            yield self.env.timeout(trip_duration)
-
+            yield self.env.timeout(T_TAKE_OFF)
+            print("Plane %s has left airspace at %s" % (self.name, getHours(self.env.now)))
     
         # while True:
         #     print('Start parking and charging at %d' % self.env.now)
@@ -116,7 +133,8 @@ class Plane(object):
 
 
 env = simpy.Environment()
-pg = PlaneGenerator(env)
+runways = simpy.PriorityResource(env, capacity=2)
+pg = PlaneGenerator(env, runways)
 env.run(until=24)
 
 # means = np.zeros(24)
@@ -133,7 +151,7 @@ n = len(planes)
 x = [0, 5]
 y = [0, 0]
 
-m = 15
+m = 7
  
 for i in range(0, n, m):
     y1 = y2 = y3 = 0
